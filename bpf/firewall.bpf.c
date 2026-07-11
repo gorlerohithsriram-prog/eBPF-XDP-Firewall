@@ -1,4 +1,5 @@
 // firewall.bpf.c
+
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
@@ -14,9 +15,28 @@ struct {
     __type(value, __u8);
 } blocked_ips SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 1024);
+    __type(key, __u32);
+    __type(value, __u8);
+} allowed_ips SEC(".maps");
+
 static __always_inline int is_ipv4(struct ethhdr *eth)
 {
     return eth->h_proto == bpf_htons(ETH_P_IP);
+}
+
+static __always_inline int allow_ip(struct iphdr *ip)
+{
+    __u8 *allowed;
+
+    allowed = bpf_map_lookup_elem(&allowed_ips, &ip->saddr);
+
+    if (allowed)
+        return 1;
+
+    return 0;
 }
 
 static __always_inline int block_ip(struct iphdr *ip)
@@ -50,11 +70,18 @@ int firewall(struct xdp_md *ctx)
     if ((void *)(ip + 1) > data_end)
         return XDP_PASS;
 
+    if (allow_ip(ip))
+    {
+        bpf_printk("Allowed Source IP\n");
+        return XDP_PASS;
+    }
+
     if (block_ip(ip))
     {
         bpf_printk("Blocked Source IP\n");
         return XDP_DROP;
     }
+
     return XDP_PASS;
 }
 char LICENSE[] SEC("license") = "GPL";
