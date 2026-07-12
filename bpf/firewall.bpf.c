@@ -8,6 +8,20 @@
 
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+
+enum stats_index {
+    STAT_TOTAL_PACKETS = 0,
+    STAT_PASSED_PACKETS,
+    STAT_DROPPED_PACKETS,
+    STAT_BLOCKED_IP_HITS,
+    STAT_BLOCKED_TCP_PORT_HITS,
+    STAT_BLOCKED_UDP_PORT_HITS,
+    STAT_ALLOWED_IP_HITS,
+    STAT_ALLOWED_TCP_PORT_HITS,
+    STAT_ALLOWED_UDP_PORT_HITS,
+    STAT_MAX
+};
+
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 1024);
@@ -49,6 +63,13 @@ struct {
     __type(key, __u16);
     __type(value, __u8);
 } allowed_udp_ports SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __uint(max_entries, STAT_MAX);
+    __type(key, __u32);
+    __type(value, __u64);
+} firewall_stats SEC(".maps");
 
 static __always_inline int is_ipv4(struct ethhdr *eth)
 {
@@ -115,6 +136,16 @@ static __always_inline int block_udp_port(__u16 port)
     return blocked != NULL;
 }
 
+static __always_inline void increment_stat(__u32 index)
+{
+    __u64 *value;
+
+    value = bpf_map_lookup_elem(&firewall_stats, &index);
+
+    if (value)
+        (*value)++;
+}
+
 SEC("xdp")
 int firewall(struct xdp_md *ctx)
 {
@@ -130,18 +161,25 @@ int firewall(struct xdp_md *ctx)
         return XDP_PASS;
 
     struct iphdr *ip = (void *)(eth + 1);
-
+  
+    increment_stat(STAT_TOTAL_PACKETS);
+    
     if ((void *)(ip + 1) > data_end)
         return XDP_PASS;
 
     if (allow_ip(ip))
-    {
+    {   
+        increment_stat(STAT_ALLOWED_IP_HITS);
+        increment_stat(STAT_PASSED_PACKETS);
+
         bpf_printk("Allowed Source IP\n");
         return XDP_PASS;
     }
 
     if (block_ip(ip))
     {
+        increment_stat(STAT_BLOCKED_IP_HITS);
+        increment_stat(STAT_DROPPED_PACKETS);
         bpf_printk("Blocked Source IP\n");
         return XDP_DROP;
     }
@@ -157,12 +195,18 @@ int firewall(struct xdp_md *ctx)
 
     if (allow_tcp_port(port))
     {
+        increment_stat(STAT_ALLOWED_TCP_PORT_HITS);
+        increment_stat(STAT_PASSED_PACKETS);
+
         bpf_printk("Allowed TCP Port\n");
         return XDP_PASS;
     }
 
     if (block_tcp_port(port))
     {
+        increment_stat(STAT_BLOCKED_TCP_PORT_HITS);
+        increment_stat(STAT_DROPPED_PACKETS);
+        
         bpf_printk("Blocked TCP Port\n");
         return XDP_DROP;
     }
@@ -178,16 +222,24 @@ int firewall(struct xdp_md *ctx)
 
     if (allow_udp_port(port))
     {
+        increment_stat(STAT_ALLOWED_UDP_PORT_HITS);
+        increment_stat(STAT_PASSED_PACKETS);
+
         bpf_printk("Allowed UDP Port\n");
         return XDP_PASS;
     }
 
     if (block_udp_port(port))
     {
+        increment_stat(STAT_BLOCKED_UDP_PORT_HITS);
+        increment_stat(STAT_DROPPED_PACKETS);
+
         bpf_printk("Blocked UDP Port\n");
         return XDP_DROP;
     }
 }
+    increment_stat(STAT_PASSED_PACKETS);
+    
     return XDP_PASS;
 }
 char LICENSE[] SEC("license") = "GPL";
