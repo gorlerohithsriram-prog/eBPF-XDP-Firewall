@@ -2,12 +2,15 @@
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
-#include <linux/in.h>   
+#include <linux/in.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
 
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+
+#define RATE_LIMIT 20
+#define ONE_SECOND_NS 1000000000ULL
 
 enum stats_index {
     STAT_TOTAL_PACKETS = 0,
@@ -70,6 +73,20 @@ struct {
     __type(key, __u32);
     __type(value, __u64);
 } firewall_stats SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 4096);
+    __type(key, __u32);
+    __type(value, __u64);
+} packet_count SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 4096);
+    __type(key, __u32);
+    __type(value, __u64);
+} last_seen SEC(".maps");
 
 static __always_inline int is_ipv4(struct ethhdr *eth)
 {
@@ -161,14 +178,51 @@ int firewall(struct xdp_md *ctx)
         return XDP_PASS;
 
     struct iphdr *ip = (void *)(eth + 1);
-  
+
     increment_stat(STAT_TOTAL_PACKETS);
-    
+
     if ((void *)(ip + 1) > data_end)
         return XDP_PASS;
 
+    __u32 src_ip = ip->saddr;
+    __u64 now = bpf_ktime_get_ns();
+
+    __u64 *count = bpf_map_lookup_elem(&packet_count, &src_ip);
+    __u64 *last  = bpf_map_lookup_elem(&last_seen, &src_ip);
+
+    if (!count || !last)
+    {
+        __u64 one = 1;
+
+        bpf_map_update_elem(&packet_count, &src_ip, &one, BPF_ANY);
+        bpf_map_update_elem(&last_seen, &src_ip, &now, BPF_ANY);
+    }
+    else
+    {
+        (*count)++;
+
+        if (now - *last >= ONE_SECOND_NS)
+        {
+            if (*count > RATE_LIMIT)
+            {
+                __u8 blocked = 1;
+
+                bpf_map_update_elem(&blocked_ips,
+                                    &src_ip,
+                                    &blocked,
+                                    BPF_ANY);
+
+                increment_stat(STAT_BLOCKED_IP_HITS);
+
+                bpf_printk("Auto blocked IP due to rate limit");
+            }
+
+            *count = 1;
+            *last = now;
+        }
+    }
     if (allow_ip(ip))
-    {   
+    {
         increment_stat(STAT_ALLOWED_IP_HITS);
         increment_stat(STAT_PASSED_PACKETS);
 
@@ -206,7 +260,6 @@ int firewall(struct xdp_md *ctx)
     {
         increment_stat(STAT_BLOCKED_TCP_PORT_HITS);
         increment_stat(STAT_DROPPED_PACKETS);
-        
         bpf_printk("Blocked TCP Port\n");
         return XDP_DROP;
     }
