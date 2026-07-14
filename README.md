@@ -18,25 +18,33 @@ This project demonstrates how eBPF and XDP can be used to build a configurable f
 ✔ Configuration File Support
 ✔ Statistics Monitoring
 ✔ Adaptive Auto-Block
-✔ Error Handling
-✔ Command Line Interface
-
-## Technologies used
-- C
-- linux
-- eBPF
 
 ## Packet Flow
   Internet -> NIC -> XDP Hook -> Firewall -> PASS / DROP -> Linux Network Stack
 
 ## Requirements
-  Linux Kernel with eBPF/XDP support
-  clang
-  LLVM
-  libbpf
-  bpftool
-  iproute2
-  Make
+  Linux Kernel with eBPF/XDP support<br>
+  clang<br>
+  LLVM<br>
+  libbpf<br>
+  bpftool<br>
+  iproute2<br>
+  Make<br>
+
+## CLI Commands
+| Command      | Description                      |
+| ------------ | -------------------------------- |
+| `load`       | Attach firewall                  |
+| `unload`     | Remove firewall                  |
+| `block-ip`   | Block an IP                      |
+| `allow-ip`   | Allow an IP                      |
+| `block-tcp`  | Block TCP port                   |
+| `allow-tcp`  | Allow TCP port                   |
+| `stats`      | Show statistics                  |
+| `apply`      | Apply configuration              |
+| `rate-limit` | Set threshold                    |
+| `auto-block` | Enable/disable adaptive blocking |
+| `help`       | Show usage                       |
 
 ## Statistics
 | Statistic   | Meaning                 |
@@ -53,10 +61,16 @@ This project demonstrates how eBPF and XDP can be used to build a configurable f
 ✔ Duplicate Rule
 ✔ Unknown Directive
 ✔ Missing Config
-✔ Missing Interface
 ✔ Firewall Already Loaded
 ✔ Firewall Not Loaded
-✔ Map Full
+
+## folder structure
+| Folder     | Purpose                      |
+| ---------- | ---------------------------- |
+| `bpf/`     | eBPF/XDP program             |
+| `loader/`  | User-space CLI               |
+| `config/`  | Firewall configuration files |
+| `docs/`    | Documentation                |
 
 ## Limitations
   Currently supports IPv4 only.
