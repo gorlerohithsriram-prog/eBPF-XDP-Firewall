@@ -24,50 +24,56 @@
 
 static struct firewall_bpf *skel = NULL;
 
-static const char *iface = "enp0s3";
-
-/* ---------------------- PORT VALIDATION ---------------------- */
+static const char *iface = NULL;
 
 int valid_port(int port)
 {
     return (port > 0 && port <= 65535);
 }
 
-/* ---------------------- HELP ---------------------- */
-
 static void print_help(void)
 {
     printf("\n");
-    printf("========== eBPF Firewall ==========\n\n");
+    printf("=====================================================\n");
+    printf("                eBPF XDP Firewall\n");
+    printf("=====================================================\n\n");
 
-    printf("Usage:\n");
-    printf(" sudo ./fw load\n");
-    printf(" sudo ./fw unload\n");
-    printf(" sudo ./fw status\n\n");
-    printf(" sudo ./fw apply <config-file>\n\n");
+    printf("USAGE\n");
+    printf("  sudo ./fw load [interface]\n");
+    printf("  sudo ./fw unload\n");
+    printf("  sudo ./fw apply <config-file>\n");
+    printf("  sudo ./fw help\n\n");
 
-    printf("IP Commands:\n");
-    printf(" sudo ./fw block <ip>\n");
-    printf(" sudo ./fw unblock <ip>\n");
-    printf(" sudo ./fw allow <ip>\n");
-    printf(" sudo ./fw unallow <ip>\n\n");
+    printf("IP RULES\n");
+    printf("  sudo ./fw block <IPv4-address>\n");
+    printf("  sudo ./fw unblock <IPv4-address>\n");
+    printf("  sudo ./fw allow <IPv4-address>\n");
+    printf("  sudo ./fw unallow <IPv4-address>\n\n");
 
-    printf("TCP Commands:\n");
-    printf(" sudo ./fw block-tcp <port>\n");
-    printf(" sudo ./fw unblock-tcp <port>\n");
-    printf(" sudo ./fw allow-tcp <port>\n");
-    printf(" sudo ./fw unallow-tcp <port>\n\n");
+    printf("TCP PORT RULES\n");
+    printf("  sudo ./fw block-tcp <port>\n");
+    printf("  sudo ./fw unblock-tcp <port>\n");
+    printf("  sudo ./fw allow-tcp <port>\n");
+    printf("  sudo ./fw unallow-tcp <port>\n\n");
 
-    printf("UDP Commands:\n");
-    printf(" sudo ./fw block-udp <port>\n");
-    printf(" sudo ./fw unblock-udp <port>\n");
-    printf(" sudo ./fw allow-udp <port>\n");
-    printf(" sudo ./fw unallow-udp <port>\n\n");
+    printf("UDP PORT RULES\n");
+    printf("  sudo ./fw block-udp <port>\n");
+    printf("  sudo ./fw unblock-udp <port>\n");
+    printf("  sudo ./fw allow-udp <port>\n");
+    printf("  sudo ./fw unallow-udp <port>\n\n");
 
-    printf(" sudo ./fw help\n");
+    printf("EXAMPLES\n");
+    printf("  sudo ./fw load enp0s3\n");
+    printf("  sudo ./fw load eth0\n");
+    printf("  sudo ./fw block 192.168.1.100\n");
+    printf("  sudo ./fw allow 192.168.1.50\n");
+    printf("  sudo ./fw block-tcp 80\n");
+    printf("  sudo ./fw allow-tcp 22\n");
+    printf("  sudo ./fw block-udp 53\n");
+    printf("  sudo ./fw apply config/firewall.conf\n\n");
+
+    printf("=====================================================\n");
 }
-
-/* ---------------------- LOAD ---------------------- */
 
 int cmd_load(void)
 {
@@ -79,8 +85,6 @@ int cmd_load(void)
         fprintf(stderr, "Failed to open BPF skeleton\n");
         return 1;
     }
-    
-    /* Pin all maps */
 
     bpf_map__set_pin_path(skel->maps.blocked_ips,
                           "/sys/fs/bpf/blocked_ips");
@@ -116,8 +120,13 @@ int ifindex = if_nametoindex(iface);
 
 if (!ifindex)
 {
-    fprintf(stderr, "Invalid interface %s\n", iface);
+    fprintf(stderr,
+            "Error: Network interface '%s' not found.\n",
+            iface);
+
     firewall_bpf__destroy(skel);
+    skel = NULL;
+
     return 1;
 }
 
@@ -158,7 +167,9 @@ static int update_ip_map(const char *path, const char *ip_str, int add)
 
     if (inet_pton(AF_INET, ip_str, &ip) != 1)
     {
-        printf("Invalid IPv4 address: %s\n", ip_str);
+        fprintf(stderr,
+        "Error: Invalid IPv4 address '%s'.\n",
+        ip_str);
         close(fd);
         return -1;
     }
@@ -222,7 +233,11 @@ static int apply_config(const char *filename)
     {
         line_no++;
 
-        process_config_line(line, line_no);
+        if (process_config_line(line, line_no) != 0)
+        {
+            fprintf(stderr,
+                    "Configuration contains errors.\n");
+        }
     }
 
     fclose(fp);
@@ -237,18 +252,14 @@ static int process_config_line(char *line, int line_no)
     char *key;
     char *value;
 
-    /* Remove newline */
     line[strcspn(line, "\n")] = '\0';
 
-    /* Skip empty lines */
     if (strlen(line) == 0)
         return 0;
 
-    /* Skip comments */
     if (line[0] == '#')
         return 0;
 
-    /* Find '=' */
     key = strtok(line, "=");
     value = strtok(NULL, "=");
 
@@ -257,8 +268,6 @@ static int process_config_line(char *line, int line_no)
         printf("Line %d: Invalid format\n", line_no);
         return -1;
     }
-
-    /* ---------- IP Rules ---------- */
 
     if (!strcmp(key, "block_ip"))
     {
@@ -276,15 +285,16 @@ static int process_config_line(char *line, int line_no)
             printf("Failed to allow IP %s\n", value);
     }
 
-    /* ---------- TCP Rules ---------- */
-
     else if (!strcmp(key, "block_tcp"))
     {
         int port = atoi(value);
 
         if (!valid_port(port))
         {
-            printf("Line %d: Invalid TCP port\n", line_no);
+            fprintf(stderr,
+            "Line %d: Invalid TCP port '%s'\n",
+            line_no,
+            value);
             return -1;
         }
 
@@ -300,7 +310,10 @@ static int process_config_line(char *line, int line_no)
 
         if (!valid_port(port))
         {
-            printf("Line %d: Invalid TCP port\n", line_no);
+            fprintf(stderr,
+           "Line %d: Invalid TCP port '%s'\n",
+            line_no,
+            value);
             return -1;
         }
 
@@ -310,15 +323,16 @@ static int process_config_line(char *line, int line_no)
             printf("Failed to allow TCP Port %d\n", port);
     }
 
-    /* ---------- UDP Rules ---------- */
-
     else if (!strcmp(key, "block_udp"))
     {
         int port = atoi(value);
 
         if (!valid_port(port))
         {
-            printf("Line %d: Invalid UDP port\n", line_no);
+            fprintf(stderr,
+           "Line %d: Invalid UDP port '%s'\n",
+            line_no,
+            value);
             return -1;
         }
 
@@ -334,7 +348,10 @@ static int process_config_line(char *line, int line_no)
 
         if (!valid_port(port))
         {
-            printf("Line %d: Invalid UDP port\n", line_no);
+            fprintf(stderr,
+            "Line %d: Invalid UDP port '%s'\n",
+            line_no,
+            value);
             return -1;
         }
 
@@ -346,21 +363,48 @@ static int process_config_line(char *line, int line_no)
 
     else
     {
-        printf("Line %d: Unknown directive '%s'\n", line_no, key);
+        fprintf(stderr,
+        "Line %d: Unknown directive '%s'\n",
+        line_no,
+        key);
     }
+
+    return 0;
+}
+
+int cmd_unload(void)
+{
+    int ifindex = if_nametoindex(iface);
+
+    if (!ifindex)
+    {
+        fprintf(stderr, "Invalid interface %s\n", iface);
+        return 1;
+    }
+
+    int err = bpf_xdp_detach(ifindex, XDP_FLAGS_UPDATE_IF_NOEXIST, NULL);
+
+    if (err)
+    {
+        fprintf(stderr, "Failed to detach XDP from %s\n", iface);
+        return 1;
+    }
+
+    printf("Firewall detached from %s successfully.\n", iface);
 
     return 0;
 }
 
 int main(int argc, char *argv[])
 {
+    if (iface == NULL)
+       iface = "enp0s3";
+       
     if (argc < 2)
     {
         print_help();
         return 1;
     }
-
-    /* HELP */
 
     if (!strcmp(argv[1], "help"))
     {
@@ -368,46 +412,38 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    /* LOAD */
-
     if (!strcmp(argv[1], "load"))
     {
-        return cmd_load();
+        if (argc >= 3)
+        iface = argv[2];
+         return cmd_load();
     }
-
-    /* UNLOAD */
 
     if (!strcmp(argv[1], "unload"))
     {
-        printf("Unloading firewall...\n");
-        return 0;
-    }
-
-    /* STATUS */
-
-    if (!strcmp(argv[1], "status"))
-    {
-        printf("Firewall Status\n");
-        return 0;
+        return cmd_unload();
     }
     
     if (!strcmp(argv[1], "apply"))
     {
     if (argc != 3)
     {
-        printf("Usage: sudo ./fw apply <config-file>\n");
+        fprintf(stderr,
+        "Error: Missing configuration file.\n"
+        "Usage: sudo ./fw apply <config-file>\n");
         return 1;
     }
 
     return apply_config(argv[2]);
     }
-    /* ---------------- IP COMMANDS ---------------- */
 
     if (!strcmp(argv[1], "block"))
     {
         if (argc != 3)
         {
-            printf("Usage: sudo ./fw block <ip>\n");
+             fprintf(stderr,
+            "Error: Missing IP address.\n"
+            "Usage: sudo ./fw block <IPv4-address>\n");
             return 1;
         }
 
@@ -426,7 +462,9 @@ int main(int argc, char *argv[])
     {
         if (argc != 3)
         {
-            printf("Usage: sudo ./fw unblock <ip>\n");
+            fprintf(stderr,
+            "Error: Missing IP address.\n"
+            "Usage: sudo ./fw unblock <IPv4-address>\n");
             return 1;
         }
 
@@ -445,7 +483,9 @@ int main(int argc, char *argv[])
     {
         if (argc != 3)
         {
-            printf("Usage: sudo ./fw allow <ip>\n");
+            fprintf(stderr,
+            "Error: Missing IP address.\n"
+            "Usage: sudo ./fw allow <IPv4-address>\n");
             return 1;
         }
 
@@ -464,7 +504,9 @@ int main(int argc, char *argv[])
     {
         if (argc != 3)
         {
-            printf("Usage: sudo ./fw unallow <ip>\n");
+            fprintf(stderr,
+            "Error: Missing IP address.\n"
+            "Usage: sudo ./fw unallow <IPv4-address>\n");
             return 1;
         }
 
@@ -479,13 +521,13 @@ int main(int argc, char *argv[])
       return 0;
     }
 
-    /* ---------------- TCP COMMANDS ---------------- */
-
     if (!strcmp(argv[1], "block-tcp"))
     {
         if (argc != 3)
         {
-            printf("Usage: sudo ./fw block-tcp <port>\n");
+            fprintf(stderr,
+            "Error: Missing TCP port.\n"
+            "Usage: sudo ./fw block-tcp <port>\n");
             return 1;
         }
 
@@ -493,7 +535,10 @@ int main(int argc, char *argv[])
 
         if (!valid_port(port))
         {
-            printf("Invalid Port\n");
+            fprintf(stderr,
+            "Error: Invalid port %d.\n"
+            "Valid range is 1-65535.\n",
+            port);
             return 1;
         }
 
@@ -512,7 +557,9 @@ int main(int argc, char *argv[])
     {
         if (argc != 3)
         {
-            printf("Usage: sudo ./fw unblock-tcp <port>\n");
+            fprintf(stderr,
+            "Error: Missing TCP port.\n"
+            "Usage: sudo ./fw unblock-tcp <port>\n");
             return 1;
         }
 
@@ -520,7 +567,10 @@ int main(int argc, char *argv[])
 
         if (!valid_port(port))
         {
-            printf("Invalid Port\n");
+            fprintf(stderr,
+            "Error: Invalid port %d.\n"
+            "Valid range is 1-65535.\n",
+            port);
             return 1;
         }
 
@@ -539,7 +589,9 @@ int main(int argc, char *argv[])
     {
         if (argc != 3)
         {
-            printf("Usage: sudo ./fw allow-tcp <port>\n");
+            fprintf(stderr,
+            "Error: Missing TCP port.\n"
+            "Usage: sudo ./fw allow-tcp <port>\n");
             return 1;
         }
 
@@ -547,7 +599,10 @@ int main(int argc, char *argv[])
 
         if (!valid_port(port))
         {
-            printf("Invalid Port\n");
+            fprintf(stderr,
+            "Error: Invalid port %d.\n"
+            "Valid range is 1-65535.\n",
+            port);
             return 1;
         }
 
@@ -566,7 +621,9 @@ int main(int argc, char *argv[])
     {
         if (argc != 3)
         {
-            printf("Usage: sudo ./fw unallow-tcp <port>\n");
+            fprintf(stderr,
+            "Error: Missing TCP port.\n"
+            "Usage: sudo ./fw unallow-tcp <port>\n");
             return 1;
         }
 
@@ -574,7 +631,10 @@ int main(int argc, char *argv[])
 
         if (!valid_port(port))
         {
-            printf("Invalid Port\n");
+            fprintf(stderr,
+            "Error: Invalid port %d.\n"
+            "Valid range is 1-65535.\n",
+            port);
             return 1;
         }
 
@@ -589,13 +649,13 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    /* ---------------- UDP COMMANDS ---------------- */
-
     if (!strcmp(argv[1], "block-udp"))
     {
         if (argc != 3)
         {
-            printf("Usage: sudo ./fw block-udp <port>\n");
+            fprintf(stderr,
+            "Error: Missing UDP port.\n"
+            "Usage: sudo ./fw block-udp <port>\n");
             return 1;
         }
 
@@ -603,7 +663,10 @@ int main(int argc, char *argv[])
 
         if (!valid_port(port))
         {
-            printf("Invalid Port\n");
+            fprintf(stderr,
+            "Error: Invalid port %d.\n"
+            "Valid range is 1-65535.\n",
+            port);
             return 1;
         }
 
@@ -622,7 +685,9 @@ int main(int argc, char *argv[])
     {
         if (argc != 3)
         {
-            printf("Usage: sudo ./fw unblock-udp <port>\n");
+            fprintf(stderr,
+           "Error: Missing UDP port.\n"
+           "Usage: sudo ./fw unblock-udp <port>\n");
             return 1;
         }
 
@@ -630,7 +695,10 @@ int main(int argc, char *argv[])
 
         if (!valid_port(port))
         {
-            printf("Invalid Port\n");
+            fprintf(stderr,
+            "Error: Invalid port %d.\n"
+            "Valid range is 1-65535.\n",
+            port);
             return 1;
         }
 
@@ -649,7 +717,9 @@ int main(int argc, char *argv[])
     {
         if (argc != 3)
         {
-            printf("Usage: sudo ./fw allow-udp <port>\n");
+            fprintf(stderr,
+            "Error: Missing UDP port.\n"
+            "Usage: sudo ./fw allow-udp <port>\n");
             return 1;
         }
 
@@ -657,7 +727,10 @@ int main(int argc, char *argv[])
 
         if (!valid_port(port))
         {
-            printf("Invalid Port\n");
+            fprintf(stderr,
+            "Error: Invalid port %d.\n"
+            "Valid range is 1-65535.\n",
+            port);
             return 1;
         }
 
@@ -676,7 +749,9 @@ int main(int argc, char *argv[])
     {
         if (argc != 3)
         {
-            printf("Usage: sudo ./fw unallow-udp <port>\n");
+            fprintf(stderr,
+           "Error: Missing UDP port.\n"
+           "Usage: sudo ./fw unallow-udp <port>\n");
             return 1;
         }
 
@@ -684,7 +759,10 @@ int main(int argc, char *argv[])
 
         if (!valid_port(port))
         {
-            printf("Invalid Port\n");
+            fprintf(stderr,
+            "Error: Invalid port %d.\n"
+            "Valid range is 1-65535.\n",
+            port);
             return 1;
         }
 
@@ -699,8 +777,11 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    printf("Unknown command\n");
-    print_help();
+    fprintf(stderr,
+        "Error: Unknown command '%s'\n\n",
+        argv[1]);
 
-    return 1;
+print_help();
+
+return 1;
 }
