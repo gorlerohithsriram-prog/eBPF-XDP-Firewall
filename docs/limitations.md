@@ -1,4 +1,10 @@
-# Current Limitations
+# Limitations
+
+## Overview
+
+The current implementation of the eBPF XDP Firewall demonstrates dynamic packet filtering using eBPF and XDP. While it provides high-performance packet processing and runtime rule management, several features commonly found in production firewalls are intentionally outside the scope of this project.
+
+## Current Limitations
 
 Although the firewall successfully demonstrates high-performance packet filtering using eBPF and XDP, it has several limitations.
 
@@ -58,13 +64,13 @@ The firewall is managed only through the command-line interface.
 
 ## Limited Protocol Support
 
-Currently supported:
+The firewall currently inspects:
 
 - IPv4
 - TCP
 - UDP
 
-Other protocols are not evaluated.
+Other network protocols such as ICMP, ARP filtering, and IPv6 are not currently processed by the firewall.
 
 ---
 
@@ -90,3 +96,7 @@ Possible future work includes:
 - GeoIP filtering
 - Machine learning-based anomaly detection
 - Persistent storage across reboots
+
+## Note
+
+These limitations were intentionally accepted to keep the project focused on demonstrating the core concepts of eBPF, XDP, dynamic rule management, and runtime packet filtering. The modular architecture allows additional features to be added in future versions.
