@@ -30,6 +30,8 @@ This project demonstrates how eBPF and XDP can be used to build a configurable f
 ✔ Adaptive Auto-Block
 
 ## Folder Structure
+
+```text
 ebpf-firewall/
 │
 ├── bpf/
@@ -54,7 +56,7 @@ ebpf-firewall/
 ├── Makefile
 ├── README.md
 ├── LICENSE
-
+```
 | Folder     | Purpose                      |
 | ---------- | ---------------------------- |
 | `bpf/`     | eBPF/XDP program             |
@@ -62,9 +64,8 @@ ebpf-firewall/
 | `config/`  | Firewall configuration files |
 | `docs/`    | Documentation                |
 
-
 ## Packet Flow
-
+```text
   Internet
       │
       ▼
@@ -83,6 +84,7 @@ ebpf-firewall/
    ▼
   Linux Networking Stack
 
+```
 ## Requirements
 - Linux Kernel with eBPF/XDP support
 - clang
@@ -93,33 +95,95 @@ ebpf-firewall/
 - make
 
 ## Build
+```bash
 git clone https://github.com/gorlerohithsriram-prog/eBPF-XDP-Firewall.git
 cd eBPF-XDP-Firewall
 make
+```
 
 ## Usage
-### 1. Build the Project
-make
-### 2. Load the Firewall
-Replace `enp0s3` with your network interface if different.
-sudo ./fw load enp0s3
-### 3. Block an IP Address
-sudo ./fw block 192.168.1.100
-### 4. Allow an IP Address
-sudo ./fw allow 192.168.1.100
-### 5. Block a TCP Port
-sudo ./fw block-tcp 80
-### 6. Allow a TCP Port
-sudo ./fw allow-tcp 22
-### 7. Block a UDP Port
-sudo ./fw block-udp 53
-### 8. Apply a Configuration File
-sudo ./fw apply config/firewall.conf
-### 9. Display Help
-sudo ./fw help
-### 10. Unload the Firewall
-sudo ./fw unload
 
+### 1. Build the Project
+
+```bash
+make
+```
+
+---
+
+### 2. Load the Firewall
+
+Replace `enp0s3` with your network interface if different.
+
+```bash
+sudo ./fw load enp0s3
+```
+
+---
+
+### 3. Block an IP Address
+
+```bash
+sudo ./fw block 192.168.1.100
+```
+
+---
+
+### 4. Allow an IP Address
+
+```bash
+sudo ./fw allow 192.168.1.100
+```
+
+---
+
+### 5. Block a TCP Port
+
+```bash
+sudo ./fw block-tcp 80
+```
+
+---
+
+### 6. Allow a TCP Port
+
+```bash
+sudo ./fw allow-tcp 22
+```
+
+---
+
+### 7. Block a UDP Port
+
+```bash
+sudo ./fw block-udp 53
+```
+
+---
+
+### 8. Apply a Configuration File
+
+```bash
+sudo ./fw apply config/firewall.conf
+```
+
+---
+
+### 9. Display Help
+
+```bash
+sudo ./fw help
+```
+
+---
+
+### 10. Unload the Firewall
+
+```bash
+sudo ./fw unload
+```
+
+## CLI Commands
 | Command            | Description              |
 | ------------------ | ------------------------ |
 | `./fw load`        | Attach firewall          |
@@ -155,15 +219,15 @@ sudo ./fw unload
   No Web Dashboard.
   No Stateful Connection Tracking.
   
-## Future work
-  IPv6 support
-  CIDR rules
-  REST API
-  Web dashboard
-  Rule expiration
-  DNS/domain filtering
-  GeoIP blocking
-  Machine-learning-based anomaly detection
+## Future Work
+- IPv6 support
+- CIDR rules
+- REST API
+- Web dashboard
+- Rule expiration
+- DNS/domain filtering
+- GeoIP blocking
+- Machine-learning-based anomaly detection
 
 ## License
 This project is licensed under the MIT License. See the LICENSE file for details.
