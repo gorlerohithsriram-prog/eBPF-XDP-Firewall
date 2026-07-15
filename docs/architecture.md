@@ -16,44 +16,39 @@ The user-space application allows administrators to configure firewall rules, wh
 ```
                 +---------------------------+
                 |        User Space         |
-                |                           |
                 |  CLI (fw)                 |
                 |  Config Parser            |
-                |  Statistics Viewer        |
                 +------------+--------------+
                              |
                              | libbpf
                              |
                 +------------v--------------+
                 |      eBPF Maps            |
-                |---------------------------|
-                | Blocked IP Map            |
-                | Allowed IP Map            |
-                | Blocked TCP Port Map      |
-                | Allowed TCP Port Map      |
-                | Blocked UDP Port Map      |
-                | Allowed UDP Port Map      |
-                | Statistics Map            |
-                | Rate Counter Map          |
                 +------------+--------------+
-                             |
                              |
                 +------------v--------------+
                 |      XDP Program          |
-                |---------------------------|
                 | Ethernet Parsing          |
                 | IPv4 Parsing              |
-                | TCP/UDP Parsing           |
+                | TCP / UDP Parsing         |
                 | Rule Checking             |
-                | Statistics Update         |
-                | Adaptive Auto-Block       |
                 +------------+--------------+
                              |
-                             |
-                    Incoming Network Packet
+                  +----------+----------+
+                  |                     |
+               XDP_PASS             XDP_DROP
+                  |                     |
+                  v                     X
+        Linux Networking Stack      Packet Dropped
 ```
-
 ---
+### Packet Processing Flow
+
+1. A packet arrives at the network interface.
+2. The XDP program executes before the Linux networking stack.
+3. Ethernet and IPv4 headers are parsed.
+4. Firewall rules stored in eBPF maps are checked.
+5. The packet is either passed to the networking stack or dropped immediately.
 
 ## Components
 
@@ -61,11 +56,10 @@ The user-space application allows administrators to configure firewall rules, wh
 
 Responsibilities:
 
-- Load the eBPF program
+- Load the eBPF program using libbpf
 - Attach XDP to a network interface
 - Read configuration files
 - Update eBPF maps
-- Display statistics
 - Provide a command-line interface
 
 ---
@@ -73,6 +67,7 @@ Responsibilities:
 ### eBPF Maps
 
 Maps act as shared memory between user space and kernel space.
+Rules can be added, removed, or modified at runtime without recompiling or reloading the eBPF program.
 
 Used for:
 
@@ -81,7 +76,6 @@ Used for:
 - TCP rules
 - UDP rules
 - Packet counters
-- Statistics
 
 ---
 
@@ -94,8 +88,8 @@ Responsibilities:
 - Parse packet headers
 - Apply firewall rules
 - Update counters
-- Drop malicious packets
-- Pass legitimate traffic
+- Return `XDP_PASS` for allowed traffic
+- Return `XDP_DROP` for blocked traffic
 
 ---
 
@@ -107,3 +101,4 @@ Responsibilities:
 - Low Latency
 - Modular Design
 - Easy Extension
+- Dynamic Rule Updates
