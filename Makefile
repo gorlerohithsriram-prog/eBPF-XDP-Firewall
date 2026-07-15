@@ -1,23 +1,32 @@
 CLANG ?= clang
 CC ?= gcc
 
-BPF_CFLAGS = -O2 -g -target bpf
-USER_CFLAGS = -O2 -g
+BPF_CFLAGS := -O2 -g -target bpf
+USER_CFLAGS := -O2 -g
 
-LIBS = -lbpf -lelf -lz
+LIBS := -lbpf -lelf -lz
 
-all: bpf/firewall.bpf.o bpf/firewall.skel.h fw
+BPF_SRC := bpf/firewall.bpf.c
+BPF_OBJ := bpf/firewall.bpf.o
+SKEL := bpf/firewall.skel.h
 
-bpf/firewall.bpf.o: bpf/firewall.bpf.c
+LOADER_SRC := loader/fw.c
+TARGET := fw
+
+all: $(TARGET)
+
+$(BPF_OBJ): $(BPF_SRC)
 	$(CLANG) $(BPF_CFLAGS) -c $< -o $@
 
-bpf/firewall.skel.h: bpf/firewall.bpf.o
+$(SKEL): $(BPF_OBJ)
 	bpftool gen skeleton $< > $@
 
-fw: loader/fw.c bpf/firewall.skel.h
-	$(CC) $(USER_CFLAGS) loader/fw.c -o fw $(LIBS)
+$(TARGET): $(LOADER_SRC) $(SKEL)
+	$(CC) $(USER_CFLAGS) $(LOADER_SRC) -o $(TARGET) $(LIBS)
 
 clean:
-	rm -f fw
-	rm -f bpf/firewall.bpf.o
-	rm -f bpf/firewall.skel.h
+	rm -f $(TARGET)
+	rm -f $(BPF_OBJ)
+	rm -f $(SKEL)
+
+.PHONY: all clean
