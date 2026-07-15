@@ -1,12 +1,10 @@
-# User Guide
-
 # eBPF XDP Firewall User Guide
 
 ## Introduction
 
 Welcome to the **eBPF XDP Firewall**.
 
-This guide explains how to install, configure, and use the firewall. It is intended for users who want to manage firewall rules without modifying the source code.
+This guide explains how to build, load, configure, and use the firewall. The firewall uses Linux eBPF and XDP to filter packets at the earliest point in the networking stack, providing high-performance packet filtering with runtime configurable rules.
 
 ---
 
@@ -18,30 +16,28 @@ This guide explains how to install, configure, and use the firewall. It is inten
 4. Loading the Firewall
 5. Firewall Commands
 6. Configuration File
-7. Rule Priority
-8. Adaptive Auto-Block
-9. Viewing Statistics
-10. Example Workflow
-11. Troubleshooting
-12. Frequently Asked Questions
+7. Rule Processing Order
+8. Packet Processing
+9. Example Workflow
+10. Troubleshooting
+11. Frequently Asked Questions
 
 ---
 
 # 1. Overview
 
-The firewall is built using **eBPF** and **XDP**, allowing packets to be filtered at the earliest point in the Linux networking stack.
+The firewall provides:
 
-Features include:
+- Dynamic IP blocking
+- Dynamic IP allowlist
+- TCP port filtering
+- UDP port filtering
+- Runtime rule updates
+- Configuration file support
+- XDP-based packet filtering
+- High-performance packet processing
 
-* Dynamic IP blocking
-* Dynamic IP allowlist
-* TCP port filtering
-* UDP port filtering
-* Runtime rule updates
-* Configuration file support
-* Live statistics
-* Adaptive Auto-Block
-* Command-line interface
+The firewall evaluates every incoming packet and decides whether it should be passed to the Linux networking stack or dropped immediately.
 
 ---
 
@@ -49,14 +45,14 @@ Features include:
 
 The project requires:
 
-* Linux with eBPF/XDP support
-* clang
-* LLVM
-* libbpf
-* bpftool
-* iproute2
-* make
-* Root (sudo) privileges for loading the firewall
+- Linux kernel with eBPF/XDP support
+- clang
+- LLVM
+- libbpf
+- bpftool
+- iproute2
+- make
+- Root (sudo) privileges
 
 ---
 
@@ -65,8 +61,8 @@ The project requires:
 Clone the repository.
 
 ```bash
-git clone <repository-url>
-cd ebpf-firewall
+git clone https://github.com/gorlerohithsriram-prog/eBPF-XDP-Firewall.git
+cd eBPF-XDP-Firewall
 ```
 
 Compile the project.
@@ -75,7 +71,11 @@ Compile the project.
 make
 ```
 
-If compilation completes successfully, the firewall executable and eBPF object file will be generated.
+If compilation succeeds, the following files will be generated:
+
+- fw
+- firewall.bpf.o
+- firewall.skel.h
 
 ---
 
@@ -83,18 +83,18 @@ If compilation completes successfully, the firewall executable and eBPF object f
 
 Attach the firewall to a network interface.
 
+Example:
+
 ```bash
-sudo ./fw load eth0
+sudo ./fw load enp0s3
 ```
 
-Expected output:
+Replace `enp0s3` with your network interface if different.
+
+Successful output:
 
 ```text
-Firewall Loaded Successfully
-
-Interface : eth0
-
-Mode : XDP
+Firewall attached to enp0s3 successfully.
 ```
 
 To unload the firewall:
@@ -110,110 +110,140 @@ sudo ./fw unload
 ## Block an IP
 
 ```bash
-./fw block-ip 192.168.1.10
+sudo ./fw block 192.168.1.100
 ```
 
-Blocks all packets originating from the specified IPv4 address.
-
----
-
-## Allow an IP
-
-```bash
-./fw allow-ip 192.168.1.10
-```
-
-Allows packets from the specified IP even if a conflicting block rule exists.
+Blocks packets originating from the specified IPv4 address.
 
 ---
 
 ## Remove a Blocked IP
 
 ```bash
-./fw unblock-ip 192.168.1.10
+sudo ./fw unblock 192.168.1.100
 ```
 
 Removes the IP from the blocked list.
 
 ---
 
+## Allow an IP
+
+```bash
+sudo ./fw allow 192.168.1.50
+```
+
+Adds the IP address to the allow list.
+
+---
+
 ## Remove an Allowed IP
 
 ```bash
-./fw unallow-ip 192.168.1.10
+sudo ./fw unallow 192.168.1.50
 ```
 
-Removes the IP from the allowlist.
+Removes the IP from the allow list.
 
 ---
 
 ## Block a TCP Port
 
 ```bash
-./fw block-tcp 80
+sudo ./fw block-tcp 80
 ```
 
-Blocks incoming TCP traffic on port 80.
+Blocks incoming TCP packets destined for port 80.
+
+---
+
+## Remove a Blocked TCP Port
+
+```bash
+sudo ./fw unblock-tcp 80
+```
+
+Removes the TCP port from the blocked list.
 
 ---
 
 ## Allow a TCP Port
 
 ```bash
-./fw allow-tcp 22
+sudo ./fw allow-tcp 22
 ```
 
-Allows incoming TCP traffic on port 22.
+Allows incoming TCP packets destined for port 22.
+
+---
+
+## Remove an Allowed TCP Port
+
+```bash
+sudo ./fw unallow-tcp 22
+```
+
+Removes the TCP port from the allow list.
 
 ---
 
 ## Block a UDP Port
 
 ```bash
-./fw block-udp 53
+sudo ./fw block-udp 53
 ```
 
-Blocks incoming UDP traffic on port 53.
+Blocks incoming UDP packets destined for port 53.
+
+---
+
+## Remove a Blocked UDP Port
+
+```bash
+sudo ./fw unblock-udp 53
+```
+
+Removes the UDP port from the blocked list.
 
 ---
 
 ## Allow a UDP Port
 
 ```bash
-./fw allow-udp 53
+sudo ./fw allow-udp 53
 ```
 
-Allows incoming UDP traffic on port 53.
+Allows incoming UDP packets destined for port 53.
 
 ---
 
-## Show Statistics
+## Remove an Allowed UDP Port
 
 ```bash
-./fw stats
+sudo ./fw unallow-udp 53
 ```
 
-Displays packet processing statistics.
+Removes the UDP port from the allow list.
 
 ---
 
 ## Apply Configuration File
 
 ```bash
-./fw apply config/firewall.conf
+sudo ./fw apply config/firewall.conf
 ```
 
-Reads firewall rules from a configuration file and updates the eBPF maps.
+Reads the configuration file and updates all firewall rules.
 
 ---
 
 ## Display Help
 
 ```bash
-./fw help
+sudo ./fw help
 ```
 
-Shows all available commands.
+Displays all supported commands.
 
 ---
 
@@ -222,39 +252,39 @@ Shows all available commands.
 Example:
 
 ```text
-allow_ip=192.168.1.5
-
+# IP Rules
+allow_ip=192.168.1.10
 block_ip=192.168.1.20
 
+# TCP Rules
 allow_tcp=22
-
 block_tcp=80
 
-block_udp=53
-
-rate_limit=500
-
-auto_block=true
+# UDP Rules
+allow_udp=53
+block_udp=69
 ```
 
-Explanation:
+Supported directives:
 
-| Directive  | Description                                 |
-| ---------- | ------------------------------------------- |
-| allow_ip   | Allow traffic from an IP                    |
-| block_ip   | Block traffic from an IP                    |
-| allow_tcp  | Allow a TCP destination port                |
-| block_tcp  | Block a TCP destination port                |
-| allow_udp  | Allow a UDP destination port                |
-| block_udp  | Block a UDP destination port                |
-| rate_limit | Maximum packets per second before detection |
-| auto_block | Enable or disable Adaptive Auto-Block       |
+| Directive | Description |
+|------------|-------------|
+| allow_ip | Allow an IPv4 address |
+| block_ip | Block an IPv4 address |
+| allow_tcp | Allow a TCP destination port |
+| block_tcp | Block a TCP destination port |
+| allow_udp | Allow a UDP destination port |
+| block_udp | Block a UDP destination port |
+
+Lines beginning with `#` are treated as comments.
+
+Blank lines are ignored.
 
 ---
 
-# 7. Rule Priority
+# 7. Rule Processing Order
 
-Rules are evaluated in the following order:
+Packets are evaluated in the following order:
 
 1. Allow IP
 2. Block IP
@@ -262,80 +292,56 @@ Rules are evaluated in the following order:
 4. Block TCP Port
 5. Allow UDP Port
 6. Block UDP Port
-7. Default PASS
+7. Pass packet
 
-This priority ensures predictable firewall behavior.
-
----
-
-# 8. Adaptive Auto-Block
-
-Adaptive Auto-Block is the firewall's unique feature.
-
-Workflow:
-
-1. Count packets received from each source IP.
-2. Compare the packet rate with the configured threshold.
-3. If the threshold is exceeded:
-
-   * Automatically add the IP to the blocked map.
-   * Update firewall statistics.
-   * Drop future packets from that IP.
-
-This allows the firewall to react automatically to suspicious traffic.
+This rule priority ensures predictable firewall behaviour.
 
 ---
 
-# 9. Viewing Statistics
+# 8. Packet Processing
 
-Run:
+For every incoming packet:
 
-```bash
-./fw stats
-```
-
-Example output:
-
-```text
-Firewall Statistics
-
-Processed Packets : 10542
-
-Passed Packets    : 9810
-
-Dropped Packets   : 732
-
-Rate Violations   : 5
-
-Automatic Blocks  : 2
-```
+1. Packet reaches the network interface.
+2. XDP program executes.
+3. Ethernet header is parsed.
+4. IPv4 header is parsed.
+5. Firewall rules stored in eBPF maps are checked.
+6. Matching packets are dropped.
+7. Remaining packets are passed to the Linux networking stack.
 
 ---
 
-# 10. Example Workflow
+# 9. Example Workflow
 
 Load the firewall.
 
 ```bash
-sudo ./fw load eth0
+sudo ./fw load enp0s3
 ```
 
-Apply a configuration file.
+Block an IP.
 
 ```bash
-./fw apply config/firewall.conf
+sudo ./fw block 192.168.1.50
 ```
 
-Block an IP address.
+Block TCP port 80.
 
 ```bash
-./fw block-ip 192.168.1.50
+sudo ./fw block-tcp 80
 ```
 
-View current statistics.
+Allow SSH.
 
 ```bash
-./fw stats
+sudo ./fw allow-tcp 22
+```
+
+Apply configuration.
+
+```bash
+sudo ./fw apply config/firewall.conf
 ```
 
 Unload the firewall.
@@ -346,15 +352,16 @@ sudo ./fw unload
 
 ---
 
-# 11. Troubleshooting
+# 10. Troubleshooting
 
 ## Firewall does not load
 
-Possible causes:
+Possible reasons:
 
-* Root privileges are missing.
-* Interface name is incorrect.
-* Kernel does not support XDP/eBPF.
+- Interface name is incorrect.
+- Root privileges are missing.
+- Kernel does not support XDP.
+- Firewall is already attached.
 
 ---
 
@@ -363,99 +370,106 @@ Possible causes:
 Example:
 
 ```text
-Error:
-
-Invalid IPv4 address.
+Invalid IPv4 address
 ```
 
-Verify that the address follows the format:
+Verify that the IP address follows the format:
 
-```
+```text
 A.B.C.D
 ```
 
 ---
 
-## Configuration File Not Found
+## Invalid Port
 
 Example:
 
 ```text
-Error:
-
-Unable to locate configuration file.
+Invalid Port
 ```
 
-Verify the file path before running the command.
+Valid port numbers range from **1 to 65535**.
 
 ---
 
-## Rule Already Exists
+## Configuration File Cannot Be Opened
 
 Example:
 
 ```text
-Warning:
-
-Rule already exists.
+Failed to open config file
 ```
 
-Duplicate rules are ignored.
+Verify that the file path is correct.
 
 ---
 
-## Statistics Do Not Change
+## Unknown Command
 
-Possible causes:
+Example:
 
-* Firewall is not attached.
-* No traffic is reaching the selected interface.
-* Rules are not being matched.
+```text
+Error: Unknown command
+```
 
----
+Run:
 
-# 12. Frequently Asked Questions
+```bash
+sudo ./fw help
+```
 
-### Why use XDP?
-
-XDP processes packets before they enter the Linux networking stack, allowing unwanted traffic to be dropped earlier and reducing processing overhead.
-
----
-
-### Why use eBPF maps?
-
-eBPF maps allow firewall rules and statistics to be updated dynamically from user space without recompiling the kernel program.
+to view all supported commands.
 
 ---
 
-### Does the firewall support IPv6?
+# 11. Frequently Asked Questions
 
-No. The current implementation supports IPv4 only.
+## Why use XDP?
 
----
-
-### Can rules be modified without recompiling?
-
-Yes. Rules are updated through eBPF maps using the CLI or a configuration file.
+XDP processes packets before they enter the Linux networking stack, providing very low latency and high throughput.
 
 ---
 
-### What makes this firewall unique?
+## Why use eBPF maps?
 
-The firewall includes an **Adaptive Auto-Block** feature that automatically detects high packet rates from a source IP and blocks that IP without requiring manual intervention.
+eBPF maps allow firewall rules to be modified at runtime without recompiling or reloading the kernel program.
+
+---
+
+## Does the firewall support IPv6?
+
+No.
+
+The current implementation supports IPv4 only.
+
+---
+
+## Can firewall rules be updated without recompiling?
+
+Yes.
+
+Rules are stored in eBPF maps and can be updated dynamically through the CLI or configuration file.
+
+---
+
+## Does the firewall maintain connection state?
+
+No.
+
+Each packet is evaluated independently.
 
 ---
 
 # Best Practices
 
-* Keep configuration files under version control.
-* Review firewall statistics regularly.
-* Use the configuration file for permanent rules.
-* Use CLI commands for temporary changes.
-* Test new rules in a controlled environment before deploying them.
+- Keep frequently used rules inside a configuration file.
+- Test new firewall rules in a controlled environment.
+- Verify the correct network interface before loading the firewall.
+- Keep the project updated with future enhancements.
 
 ---
 
 # Conclusion
 
-The eBPF XDP Firewall provides a configurable, high-performance packet filtering solution using Linux eBPF and XDP. Its modular architecture, runtime configurability, and Adaptive Auto-Block feature make it suitable for learning modern Linux networking while demonstrating practical firewall design principles.
+The eBPF XDP Firewall demonstrates how Linux eBPF and XDP can be used to build a high-performance, configurable packet filtering system. The project provides runtime rule management through eBPF maps while maintaining a simple command-line interface suitable for learning modern Linux networking and firewall design.
