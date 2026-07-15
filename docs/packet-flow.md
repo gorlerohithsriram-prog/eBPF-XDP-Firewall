@@ -111,37 +111,17 @@ Priority:
 5. Allow UDP Port
 6. Block UDP Port
 
+### Rule Lookup
+
+Firewall rules are stored in eBPF maps.
+
+The XDP program performs map lookups to determine whether the packet's source IP address or destination port matches any configured allow or block rules.
+
 ---
 
 ### Step 7
 
-Statistics are updated.
+Based on the rule evaluation, the XDP program returns one of the following actions:
 
-Counters include:
-
-- Processed Packets
-- Passed Packets
-- Dropped Packets
-- Rate Violations
-- Automatic Blocks
-
----
-
-### Step 8
-
-If Adaptive Auto-Block is enabled,
-
-The packet rate is checked.
-
-If threshold exceeded,
-
-The source IP is automatically inserted into the blocked IP map.
-
----
-
-### Step 9
-
-The XDP program returns:
-
-- XDP_PASS
-- XDP_DROP
+- `XDP_PASS` – The packet is forwarded to the Linux networking stack.
+- `XDP_DROP` – The packet is discarded immediately by the network driver.
